@@ -1,15 +1,32 @@
 # coding: utf-8
-import wx
-import ctypes
-import tempfile
-import uuid
-import os
-import os.path
-import wx.adv
-import configparser
+from wx import (App, Frame, Dialog, MessageDialog, FileDialog, Menu, FileDropTarget,
+                BoxSizer, ListCtrl, Button, CheckBox, StaticText,
+                Colour, Font)
+
+from wx import (VERTICAL, HORIZONTAL, LC_REPORT, BORDER_SUNKEN, FD_MULTIPLE, YES_DEFAULT,
+                ALL, EXPAND, ALIGN_CENTER_HORIZONTAL, LIST_AUTOSIZE_USEHEADER,
+                MINIMIZE_BOX, DEFAULT_FRAME_STYLE, MAXIMIZE_BOX,
+                BOTH,
+                EVT_BUTTON, EVT_CLOSE, EVT_MENU,
+                ICON_QUESTION,
+                ID_OK, ID_ANY,
+                DEFAULT, NORMAL)
+
+from wx.lib.embeddedimage import PyEmbeddedImage
+from ctypes import WinDLL
+from tempfile import TemporaryDirectory
+from uuid import uuid4
+from os import remove, startfile
+from os.path import join
+from wx.adv import TaskBarIcon, EVT_TASKBAR_LEFT_DOWN, EVT_TASKBAR_RIGHT_DOWN
+from configparser import ConfigParser
 from fontTools.ttLib.ttFont import TTFont
 from fontTools.ttLib import TTCollection
+from argparse import ArgumentParser
+from signal import signal, SIGINT
+from sys import exit
 
+ICON_BASE64 = '''AAABAAEAICAAAAEAIACoEAAAFgAAACgAAAAgAAAAQAAAAAEAIAAAAAAAABAAACUWAAAlFgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL1uEIC+bhD/vW4QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC9bhCAvm4Q/75uEP++bhD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvW4QgL5uEP++bhD/vm4Q/79uEH8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL1uEIC+bhD/vm4Q/75uEP+/bhB/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/cBAgvm4QoL5uEM++bhD/vm4Q/75uEN++bhCQv3AQQAAAAAC9bhCAvm4Q/75uEP++bhD/v24QfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/cBAQvm4QkL5uEP++bhD/vm4Q/75uEP++bhD/vm4Q/75uEP++bhD/vm0Qv75uEP++bhD/vm4Q/79uEH8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAv3AQEL5uEM++bhD/vm4Q/75uEP++bhD/vm4Q/75uEP++bhD/vm4Q/75uEP++bhD/vm4Q/75uEP+/bhB/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC+bhCQvm4Q/75uEP++bhD/vW8Qn79wEEAAAAAAv3AQEL9wEEC+bRC/vm4Q/75uEP++bhD/vm0QvwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAv3AQQL5uEP++bhD/vm4Q/79uEH8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/bhB/vm4Q/75uEP++bhD/v3AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC+bhCQvm4Q/75uEP++bRC/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC8bhCgvm4Q/75uEP+/bxCfAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL5uEN++bhD/vm4Q/79wEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL9wEEC+bhD/vm4Q/75uEM8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvm4Q/75uEP++bhD/v3AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL5uEP++bhD/vm4Q/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC+bhD/vm4Q/75uEP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/cBAQvm4Q/75uEP++bhD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL5uEM++bhD/vm4Q/79wEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL9wEEC+bhD/vm4Q/75uEN8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvG4QoL5uEP++bhD/v28QnwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvm0Qv75uEP++bhD/vm4QkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/cBAgvm4Q/75uEP++bhD/vW4QgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL1uEIC+bhD/vm4Q/75uEP+/cBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/bxCPvm4Q/75uEP++bhD/vm0Qv79wEEC/cBAQAAAAAL9wEEC+bhCgvm4Q/75uEP++bhD/vW8QjwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL9wEBC9bhDQvm4Q/75uEP++bhD/vm4Q/75uEP++bhD/vm4Q/75uEP++bhD/vm4Q/75uEM+/cBAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL9wEBC/bxCPvm4Q/75uEP++bhD/vm4Q/75uEP++bhD/vm4Q/75uEP+9bxCPv3AQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/cBBAvG4QkL5uEN++bhD/vm4Q/75uEM+9bxCfv3AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA///////////////////////////////////+P////D////g////wf//AIP//AAH//gAD//4EB//8H4P//D/D//w/w//8P+P//H/D//w/w//8P8P//B+D//4CB//+AAf//wAP///AP/////////////////////////////////8='''
 
 # HWND_BROADCAST = 0xFFFF
 # SMTO_ABORTIFHUNG = 0x0002
@@ -19,49 +36,53 @@ CONFIRM = 'confirm'
 HIDE = 'hide'
 DESTROY = 'destroy'
 
+gdi32 = WinDLL("gdi32.dll")
+# user32 = WinDLL("user32.dll")
 
-class MainFrame(wx.Frame):
+
+class MainFrame(Frame):
     def __init__(self):
-        super().__init__(None, title='Font Loader')
+        super().__init__(None, title='Font Loader', size=(330, 500))
+        self.SetBackgroundColour(Colour("WHITE"))
 
-        data_sizer = wx.BoxSizer(wx.VERTICAL)
+        data_sizer = BoxSizer(VERTICAL)
 
-        self.fontsList = wx.ListCtrl(self, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
+        self.fontsList = ListCtrl(self, style=LC_REPORT | BORDER_SUNKEN)
         self.fontsList.AppendColumn('Font Name')
-        self.fontsList.AppendColumn('File Path', width=wx.LIST_AUTOSIZE_USEHEADER)
-        data_sizer.Add(self.fontsList, 1, wx.ALL | wx.EXPAND, 5)
+        self.fontsList.AppendColumn('File Path', width=LIST_AUTOSIZE_USEHEADER)
+        data_sizer.Add(self.fontsList, 1, ALL | EXPAND, 5)
 
-        control_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        control_sizer = BoxSizer(HORIZONTAL)
 
-        self.loadFont = wx.Button(self, label='Load Font')
-        control_sizer.Add(self.loadFont, 0, wx.ALL | wx.EXPAND, 5)
+        self.loadFont = Button(self, label='Load Font')
+        control_sizer.Add(self.loadFont, 0, ALL | EXPAND, 5)
 
-        self.releaseFont = wx.Button(self, label='Release Font')
-        control_sizer.Add(self.releaseFont, 0, wx.ALL | wx.EXPAND, 5)
+        self.releaseFont = Button(self, label='Release Font')
+        control_sizer.Add(self.releaseFont, 0, ALL | EXPAND, 5)
 
-        self.releaseAll = wx.Button(self, label='Release All')
-        control_sizer.Add(self.releaseAll, 0, wx.ALL | wx.EXPAND, 5)
+        self.releaseAll = Button(self, label='Release All')
+        control_sizer.Add(self.releaseAll, 0, ALL | EXPAND, 5)
 
-        data_sizer.Add(control_sizer, 0, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL, 5)
+        data_sizer.Add(control_sizer, 0, ALL | ALIGN_CENTER_HORIZONTAL, 5)
 
         self.SetSizer(data_sizer)
         self.Layout()
 
-        self.Centre(wx.BOTH)
+        self.Centre(BOTH)
 
-        file_drop_target = FileDropTarget(self.load_font)
+        file_drop_target = FontFileDropTarget(self.load_font)
         self.fontsList.SetDropTarget(file_drop_target)
 
-        self.Bind(wx.EVT_CLOSE, self.on_close)
-        self.loadFont.Bind(wx.EVT_BUTTON, self.on_load_font)
-        self.releaseFont.Bind(wx.EVT_BUTTON, self.on_release_font)
-        self.releaseAll.Bind(wx.EVT_BUTTON, self.on_release_all)
+        self.Bind(EVT_CLOSE, self.on_close)
+        self.loadFont.Bind(EVT_BUTTON, self.on_load_font)
+        self.releaseFont.Bind(EVT_BUTTON, self.on_release_font)
+        self.releaseAll.Bind(EVT_BUTTON, self.on_release_all)
 
-        self.taskbar_icon = TaskBarIcon(self)
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.taskbar_icon = FontTaskBarIcon(self)
+        self.temp_dir = TemporaryDirectory()
 
         try:
-            config = configparser.ConfigParser()
+            config = ConfigParser()
             config.read(r'./fontLoader.conf', encoding='utf-8')
             confirm = config.get('Settings', 'close')
             assert confirm == HIDE or confirm == DESTROY
@@ -74,12 +95,13 @@ class MainFrame(wx.Frame):
             self.release_font(reversed(range(self.fontsList.GetItemCount())))
             self.temp_dir.cleanup()
         except:
-            warning_box = wx.MessageDialog(None, "Failed to release all the fonts\n"
-                                                 "You'd better clean up temp directory \n{}\nby yourself later."
-                                           .format(self.temp_dir.name),
-                                           'Error', wx.YES_DEFAULT | wx.ICON_QUESTION)
+            warning_box = MessageDialog(None, "Failed to release all the fonts\n"
+                                              "You'd better clean up temp directory \n{}\nby yourself later."
+                                        .format(self.temp_dir.name),
+                                        'Error', YES_DEFAULT | ICON_QUESTION)
             warning_box.ShowModal()
             warning_box.Destroy()
+            startfile(self.temp_dir.name)
         finally:
             self.taskbar_icon.Destroy()
             super().Destroy()
@@ -96,20 +118,22 @@ class MainFrame(wx.Frame):
 
     def on_load_font(self, event):
         file_filter = 'Font File (*.ttf,*.ttc,*.otf)|*.ttf;*.ttc;*.otf'
-        file_dialog = wx.FileDialog(self, message='Choose a font file', wildcard=file_filter, style=wx.FD_MULTIPLE)
+        file_dialog = FileDialog(self, message='Choose a font file', wildcard=file_filter, style=FD_MULTIPLE)
         status = file_dialog.ShowModal()
-        if status != wx.ID_OK:
+        if status != ID_OK:
             return
 
         file_list = file_dialog.GetPaths()
         self.load_font(file_list)
 
     def on_release_font(self, event):
+        selected_item = []
         item = self.fontsList.GetFirstSelected()
-        if item == -1:
-            return
+        while item != -1:
+            selected_item.append(item)
+            item = self.fontsList.GetNextSelected(item)
 
-        self.release_font([item])
+        self.release_font(reversed(selected_item))
 
     def on_release_all(self, event):
         self.release_font(reversed(range(self.fontsList.GetItemCount())))
@@ -121,7 +145,7 @@ class MainFrame(wx.Frame):
                 if font_path.endswith('.ttc'):
                     ttc_font_list = []
                     for font in TTCollection(font_path).fonts:
-                        temp_font_path = os.path.join(self.temp_dir.name, str(uuid.uuid4()) + '.ttf')
+                        temp_font_path = join(self.temp_dir.name, str(uuid4()) + '.ttf')
                         font.save(temp_font_path)
                         ttc_font_list.append(temp_font_path)
                     self.load_font(ttc_font_list)
@@ -130,17 +154,17 @@ class MainFrame(wx.Frame):
                 font = TTFont(font_path)
                 font_name = font.get('name').getDebugName(6)
 
-                if ctypes.windll.gdi32.AddFontResourceW(font_path) == 0:
+                if gdi32.AddFontResourceW(font_path) == 0:
                     raise RuntimeError('Failed to load {}'.format(font_path))
 
             except Exception:
-                warning_box = wx.MessageDialog(None, 'Failed to load {}\nFont Path:\n{}'.format(font_name, font_path), 'Error',
-                                               wx.YES_DEFAULT | wx.ICON_QUESTION)
+                warning_box = MessageDialog(None, 'Failed to load {}\nFont Path:\n{}'.format(font_name, font_path),
+                                            'Error', YES_DEFAULT | ICON_QUESTION)
                 warning_box.ShowModal()
                 warning_box.Destroy()
                 continue
 
-            # ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
+            # user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
             self.fontsList.Append([font_name, font_path])
 
     def release_font(self, items):
@@ -149,24 +173,24 @@ class MainFrame(wx.Frame):
             font_path = self.fontsList.GetItemText(item, 1)
 
             try:
-                if ctypes.windll.gdi32.RemoveFontResourceW(font_path) == 0:
+                if gdi32.RemoveFontResourceW(font_path) == 0:
                     raise RuntimeError('Failed to load {}'.format(font_path))
 
                 if font_path.startswith(self.temp_dir.name):
-                    os.remove(font_path)
+                    remove(font_path)
 
             except Exception:
-                warning_box = wx.MessageDialog(None, 'Failed to release {}\nFont Path:\n{}'.format(font_name, font_path), 'Error',
-                                               wx.YES_DEFAULT | wx.ICON_QUESTION)
+                warning_box = MessageDialog(None, 'Failed to release {}\nFont Path:\n{}'.format(font_name, font_path),
+                                            'Error', YES_DEFAULT | ICON_QUESTION)
                 warning_box.ShowModal()
                 warning_box.Destroy()
                 continue
 
-            # ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
+            # user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
             self.fontsList.DeleteItem(item)
 
 
-class FileDropTarget(wx.FileDropTarget):
+class FontFileDropTarget(FileDropTarget):
     def __init__(self, load_font):
         super().__init__()
         self.load_font = load_font
@@ -176,29 +200,28 @@ class FileDropTarget(wx.FileDropTarget):
         return True
 
 
-class TaskBarIcon(wx.adv.TaskBarIcon):
+class FontTaskBarIcon(TaskBarIcon):
     def __init__(self, main_frame):
-        super(TaskBarIcon, self).__init__()
+        super(FontTaskBarIcon, self).__init__()
         self.main_frame = main_frame
 
-        icon = wx.Icon(r'./icon.ico', wx.BITMAP_TYPE_ICO)
-        self.SetIcon(icon, 'Font Loader')
+        self.SetIcon(PyEmbeddedImage(ICON_BASE64).getIcon(), 'Font Loader')
 
-        self.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN, self.on_left_down)
-        self.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN, self.on_right_down)
+        self.Bind(EVT_TASKBAR_LEFT_DOWN, self.on_left_down)
+        self.Bind(EVT_TASKBAR_RIGHT_DOWN, self.on_right_down)
 
     def CreatePopupMenu(self):
-        menu = wx.Menu()
+        menu = Menu()
 
-        restore_item = menu.Append(wx.ID_ANY, 'Restore')
-        add_font_item = menu.Append(wx.ID_ANY, 'Load Font')
-        release_all_item = menu.Append(wx.ID_ANY, 'Release All')
-        exit_item = menu.Append(wx.ID_ANY, 'Exit')
+        restore_item = menu.Append(ID_ANY, 'Restore')
+        add_font_item = menu.Append(ID_ANY, 'Load Font')
+        release_all_item = menu.Append(ID_ANY, 'Release All')
+        exit_item = menu.Append(ID_ANY, 'Exit')
 
-        self.Bind(wx.EVT_MENU, self.on_restore, restore_item)
-        self.Bind(wx.EVT_MENU, self.main_frame.on_load_font, add_font_item)
-        self.Bind(wx.EVT_MENU, self.main_frame.on_release_all, release_all_item)
-        self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
+        self.Bind(EVT_MENU, self.on_restore, restore_item)
+        self.Bind(EVT_MENU, self.main_frame.on_load_font, add_font_item)
+        self.Bind(EVT_MENU, self.main_frame.on_release_all, release_all_item)
+        self.Bind(EVT_MENU, self.on_exit, exit_item)
 
         return menu
 
@@ -217,42 +240,55 @@ class TaskBarIcon(wx.adv.TaskBarIcon):
         self.main_frame.Destroy()
 
 
-class ConfirmFrame(wx.Frame):
+class ConfirmFrame(Dialog):
     def __init__(self, parent):
-        super().__init__(parent, title='Hint')
+        super().__init__(parent, title='Hint', size=(350, 150),
+                         style=DEFAULT_FRAME_STYLE ^ MAXIMIZE_BOX ^ MINIMIZE_BOX)
+        self.SetMaxSize((350, 150))
+        self.SetMinSize((350, 150))
+        self.SetBackgroundColour(Colour("WHITE"))
+
         self.parent = parent
+        self.parent.Enable(False)
 
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        main_sizer = BoxSizer(VERTICAL)
 
-        self.hint_label = wx.StaticText(self, label='Exit or hide it in the system tray?')
-        main_sizer.Add(self.hint_label, 1, wx.ALL | wx.EXPAND, 5)
+        self.hint_label = StaticText(self, label='Exit or hide it in the task bar?')
 
-        self.remember = wx.CheckBox(self, label="Don't ask again")
-        main_sizer.Add(self.remember, 1, wx.ALL | wx.EXPAND, 5)
+        hint_font = self.hint_label.GetFont()
+        hint_font.SetPointSize(15)
+        self.hint_label.SetFont(hint_font)
 
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        main_sizer.Add(self.hint_label, 1, ALL | EXPAND, 5)
 
-        self.cancel = wx.Button(self, label='Cancel')
-        button_sizer.Add(self.cancel, 1, wx.ALL | wx.EXPAND, 5)
+        self.remember = CheckBox(self, label="Don't ask again")
+        main_sizer.Add(self.remember, 1, ALL | EXPAND, 5)
 
-        self.hide = wx.Button(self, label='Hide')
-        button_sizer.Add(self.hide, 1, wx.ALL | wx.EXPAND, 5)
+        button_sizer = BoxSizer(HORIZONTAL)
 
-        self.exit = wx.Button(self, label='Exit')
-        button_sizer.Add(self.exit, 1, wx.ALL | wx.EXPAND, 5)
+        self.cancel = Button(self, label='Cancel')
+        button_sizer.Add(self.cancel, 1, ALL, 5)
 
-        main_sizer.Add(button_sizer, 1, wx.ALL | wx.EXPAND, 5)
+        self.hide = Button(self, label='Hide')
+        button_sizer.Add(self.hide, 1, ALL, 5)
+
+        self.exit = Button(self, label='Exit')
+        button_sizer.Add(self.exit, 1, ALL, 5)
+
+        main_sizer.Add(button_sizer, 1, ALL | ALIGN_CENTER_HORIZONTAL, 5)
 
         self.SetSizer(main_sizer)
         self.Layout()
 
-        self.Centre(wx.BOTH)
+        self.Centre(BOTH)
 
-        self.cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
-        self.exit.Bind(wx.EVT_BUTTON, self.on_exit)
-        self.hide.Bind(wx.EVT_BUTTON, self.on_hide)
+        self.Bind(EVT_CLOSE, self.on_cancel)
+        self.cancel.Bind(EVT_BUTTON, self.on_cancel)
+        self.exit.Bind(EVT_BUTTON, self.on_exit)
+        self.hide.Bind(EVT_BUTTON, self.on_hide)
 
     def on_cancel(self, event):
+        self.parent.Enable(True)
         self.Destroy()
 
     def on_exit(self, event):
@@ -269,7 +305,7 @@ class ConfirmFrame(wx.Frame):
         if not self.remember.GetValue():
             return
 
-        config = configparser.ConfigParser()
+        config = ConfigParser()
         config.add_section('Settings')
 
         config.set('Settings', 'close', key)
@@ -280,9 +316,21 @@ class ConfirmFrame(wx.Frame):
 
 
 if __name__ == '__main__':
-    app = wx.App()
-    MainFrame().Show()
-    app.MainLoop()
+    parser = ArgumentParser(description='Load font temply to system.')
 
-# TODO CIL支持
-# TODO 完善style
+    parser.add_argument('font_list', nargs='*', help='Font list which will be loaded')
+    parser.add_argument('-D', '--display', help="Display main window", action='store_true')
+    args = parser.parse_args()
+
+    app = App()
+    main_frame = MainFrame()
+
+    if len(args.font_list) != 0:
+        main_frame.load_font(args.font_list)
+        if args.display:
+            main_frame.Show()
+
+    else:
+        main_frame.Show()
+
+    app.MainLoop()
