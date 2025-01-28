@@ -74,8 +74,9 @@ class MainFrame(wx.Frame):
             self.release_font(reversed(range(self.fontsList.GetItemCount())))
             self.temp_dir.cleanup()
         except:
-            warning_box = wx.MessageDialog(None, "Failed to release all the fonts\n "
-                                                 "You'd better clean up temp directory {} by yourself later.".format(self.temp_dir),
+            warning_box = wx.MessageDialog(None, "Failed to release all the fonts\n"
+                                                 "You'd better clean up temp directory \n{}\nby yourself later."
+                                           .format(self.temp_dir.name),
                                            'Error', wx.YES_DEFAULT | wx.ICON_QUESTION)
             warning_box.ShowModal()
             warning_box.Destroy()
@@ -115,7 +116,7 @@ class MainFrame(wx.Frame):
 
     def load_font(self, font_list):
         for font_path in font_list:
-            font_name = 'unknown'
+            font_name = 'Unknown'
             try:
                 if font_path.endswith('.ttc'):
                     ttc_font_list = []
@@ -127,8 +128,7 @@ class MainFrame(wx.Frame):
                     continue
 
                 font = TTFont(font_path)
-                font_name = font.get('name').getDebugName(4)
-                font_ps_name = font.get('name').getDebugName(6)
+                font_name = font.get('name').getDebugName(6)
 
                 if ctypes.windll.gdi32.AddFontResourceW(font_path) == 0:
                     raise RuntimeError('Failed to load {}'.format(font_path))
@@ -141,7 +141,7 @@ class MainFrame(wx.Frame):
                 continue
 
             # ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
-            self.fontsList.Append([font_ps_name, font_path])
+            self.fontsList.Append([font_name, font_path])
 
     def release_font(self, items):
         for item in items:
