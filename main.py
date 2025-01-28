@@ -70,10 +70,18 @@ class MainFrame(wx.Frame):
             self.confirm = CONFIRM
 
     def Destroy(self):
-        self.release_font(reversed(range(self.fontsList.GetItemCount())))
-        self.temp_dir.cleanup()
-        self.taskbar_icon.Destroy()
-        super().Destroy()
+        try:
+            self.release_font(reversed(range(self.fontsList.GetItemCount())))
+            self.temp_dir.cleanup()
+        except:
+            warning_box = wx.MessageDialog(None, "Failed to release all the fonts\n "
+                                                 "You'd better clean up temp directory {} by yourself later.".format(self.temp_dir),
+                                           'Error', wx.YES_DEFAULT | wx.ICON_QUESTION)
+            warning_box.ShowModal()
+            warning_box.Destroy()
+        finally:
+            self.taskbar_icon.Destroy()
+            super().Destroy()
 
     def on_close(self, event):
         if self.confirm == CONFIRM:
@@ -107,6 +115,7 @@ class MainFrame(wx.Frame):
 
     def load_font(self, font_list):
         for font_path in font_list:
+            font_name = 'unknown'
             try:
                 if font_path.endswith('.ttc'):
                     ttc_font_list = []
@@ -118,36 +127,40 @@ class MainFrame(wx.Frame):
                     continue
 
                 font = TTFont(font_path)
-                font_name = font.get('name').getDebugName(6)
+                font_name = font.get('name').getDebugName(4)
+                font_ps_name = font.get('name').getDebugName(6)
 
                 if ctypes.windll.gdi32.AddFontResourceW(font_path) == 0:
                     raise RuntimeError('Failed to load {}'.format(font_path))
 
             except Exception:
-                warning_box = wx.MessageDialog(None, 'Failed to load {}'.format(font_path), 'Error',
+                warning_box = wx.MessageDialog(None, 'Failed to load {}\nFont Path:\n{}'.format(font_name, font_path), 'Error',
                                                wx.YES_DEFAULT | wx.ICON_QUESTION)
                 warning_box.ShowModal()
                 warning_box.Destroy()
                 continue
 
             # ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
-            self.fontsList.Append([font_name, font_path])
-            self.fontsList.SetItemFont(self.fontsList.GetItemCount() - 1, wx.Font(wx.FontInfo(10).FaceName(font_name)))
+            self.fontsList.Append([font_ps_name, font_path])
 
     def release_font(self, items):
         for item in items:
             font_name = self.fontsList.GetItemText(item, 0)
             font_path = self.fontsList.GetItemText(item, 1)
 
-            if ctypes.windll.gdi32.RemoveFontResourceW(font_path) == 0:
-                warning_box = wx.MessageDialog(None, 'Failed to release {}'.format(font_name), 'Error',
+            try:
+                if ctypes.windll.gdi32.RemoveFontResourceW(font_path) == 0:
+                    raise RuntimeError('Failed to load {}'.format(font_path))
+
+                if font_path.startswith(self.temp_dir.name):
+                    os.remove(font_path)
+
+            except Exception:
+                warning_box = wx.MessageDialog(None, 'Failed to release {}\nFont Path:\n{}'.format(font_name, font_path), 'Error',
                                                wx.YES_DEFAULT | wx.ICON_QUESTION)
                 warning_box.ShowModal()
                 warning_box.Destroy()
                 continue
-
-            if font_path.startswith(self.temp_dir.name):
-                os.remove(font_path)
 
             # ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_FONTCHANGE, 0, 0, SMTO_ABORTIFHUNG, 1000, None)
             self.fontsList.DeleteItem(item)
@@ -202,7 +215,6 @@ class TaskBarIcon(wx.adv.TaskBarIcon):
 
     def on_exit(self, event):
         self.main_frame.Destroy()
-        self.Destroy()
 
 
 class ConfirmFrame(wx.Frame):
@@ -273,5 +285,4 @@ if __name__ == '__main__':
     app.MainLoop()
 
 # TODO CIL支持
-# TODO 显示字体修复
-# TODO ?
+# TODO 完善style
