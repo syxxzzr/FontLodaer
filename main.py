@@ -8,8 +8,7 @@ from wx import (VERTICAL, HORIZONTAL, LC_REPORT, BORDER_SUNKEN, FD_MULTIPLE, YES
                 MINIMIZE_BOX, DEFAULT_FRAME_STYLE, MAXIMIZE_BOX,
                 BOTH,
                 EVT_BUTTON, EVT_CLOSE, EVT_MENU,
-                ICON_QUESTION,
-                ID_OK, ID_ANY)
+                ICON_QUESTION, ID_OK, ID_ANY)
 
 from wx.lib.embeddedimage import PyEmbeddedImage
 from ctypes import WinDLL
@@ -321,14 +320,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     app = App()
-    main_frame = MainFrame()
+    frame = MainFrame()
 
     if len(args.font_list) != 0:
-        main_frame.load_font(args.font_list)
+        frame.load_font(args.font_list)
         if args.display:
-            main_frame.Show()
+            frame.Show()
 
     else:
-        main_frame.Show()
+        frame.Show()
 
     app.MainLoop()
