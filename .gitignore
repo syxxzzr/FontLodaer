@@ -1,3 +1,4 @@
 /.conda/*
 /.idea/*
+/.release/*
 /fontLoader.conf

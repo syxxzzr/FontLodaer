@@ -297,6 +297,7 @@ class ConfirmFrame(Dialog):
         self.__remember_config(HIDE)
         self.Destroy()
         self.parent.Hide()
+        self.parent.Enable(True)
 
     def __remember_config(self, key):
         if not self.remember.GetValue():
