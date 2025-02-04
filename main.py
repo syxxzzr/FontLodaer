@@ -141,7 +141,13 @@ class MainFrame(Frame):
                 if font_path.endswith('.ttc'):
                     ttc_font_list = []
                     for font in TTCollection(font_path).fonts:
-                        temp_font_path = join(self.temp_dir.name, str(uuid4()) + '.ttf')
+                        if font.has_table('CFF ') or font.has_table('CFF2'):
+                            font_extension = '.otf'
+                        elif font.has_table("glyf"):
+                            font_extension = '.ttf'
+                        else:
+                            continue
+                        temp_font_path = join(self.temp_dir.name, str(uuid4()) + font_extension)
                         font.save(temp_font_path)
                         ttc_font_list.append(temp_font_path)
                     self.load_font(ttc_font_list)
